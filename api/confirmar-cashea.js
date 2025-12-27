@@ -3,7 +3,7 @@
 // Relojteca - Vercel Function
 // ================================================
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   
   // Configurar CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -27,10 +27,10 @@ export default async function handler(req, res) {
   
   // Extraer datos del body
   const { 
-    idNumber,      // ID de la orden en Cashea
-    amount,        // Monto del pago
-    customer,      // Datos del cliente
-    lineItems,     // Items del carrito
+    idNumber,        // ID de la orden en Cashea
+    amount,          // Monto del pago
+    customer,        // Datos del cliente
+    lineItems,       // Items del carrito
     shippingAddress, // Dirección de envío
     email,
     phone
@@ -222,4 +222,4 @@ export default async function handler(req, res) {
       idNumber: idNumber
     });
   }
-}
+};
