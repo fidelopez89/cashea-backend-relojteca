@@ -1,18 +1,8 @@
 {
-  "name": "cashea-backend-relojteca",
-  "version": "2.0.0",
-  "description": "Backend para confirmar pagos Cashea y crear órdenes en Shopify",
-  "main": "api/confirmar-cashea.js",
-  "type": "module",
-  "scripts": {
-    "start": "node api/confirmar-cashea.js",
-    "dev": "vercel dev",
-    "deploy": "vercel --prod"
-  },
-  "dependencies": {
-    "node-fetch": "^3.3.2"
-  },
-  "engines": {
-    "node": ">=18.x"
-  }
-}
+     "name": "cashea-backend-relojteca",
+     "version": "2.0.0",
+     "description": "Backend para confirmar pagos Cashea y crear órdenes en Shopify",
+     "engines": {
+       "node": ">=18.x"
+     }
+   }
