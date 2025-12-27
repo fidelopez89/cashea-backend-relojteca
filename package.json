@@ -1,8 +1,3 @@
 {
-     "name": "cashea-backend-relojteca",
-     "version": "2.0.0",
-     "description": "Backend para confirmar pagos Cashea y crear órdenes en Shopify",
-     "engines": {
-       "node": ">=18.x"
-     }
-   }
+  "version": 2
+}
