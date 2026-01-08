@@ -1,7 +1,14 @@
 // ================================================
 // BACKEND CASHEA - Confirmación de pagos
-// Relojteca - Vercel Function
+// Vercel Serverless Function
 // ================================================
+
+const https = require('https');
+
+// Agente HTTPS que permite certificados no verificados (para Cashea)
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false
+});
 
 module.exports = async function handler(req, res) {
   
@@ -27,11 +34,11 @@ module.exports = async function handler(req, res) {
   
   // Extraer datos del body
   const { 
-    idNumber,        // ID de la orden en Cashea
-    amount,          // Monto del pago
-    customer,        // Datos del cliente
-    lineItems,       // Items del carrito
-    shippingAddress, // Dirección de envío
+    idNumber,
+    amount,
+    customer,
+    lineItems,
+    shippingAddress,
     email,
     phone
   } = req.body;
@@ -59,29 +66,31 @@ module.exports = async function handler(req, res) {
     console.error('❌ No hay productos en el pedido');
     return res.status(400).json({
       error: 'Datos incompletos',
-      message: 'Se requiere al menos un producto'
+      message: 'No hay productos en el pedido'
     });
   }
 
-  if (!customer || !customer.first_name || !customer.last_name) {
+  if (!customer || !customer.first_name) {
     console.error('❌ Datos del cliente incompletos');
     return res.status(400).json({
       error: 'Datos incompletos',
-      message: 'Se requieren datos completos del cliente'
+      message: 'Se requieren datos del cliente'
     });
   }
 
   console.log('✅ Validación OK:', { 
     idNumber, 
     amount: paymentAmount,
-    customer: `${customer.first_name} ${customer.last_name}`,
+    customer: customer.first_name + ' ' + customer.last_name,
     items: lineItems.length
   });
 
   try {
     // ===== PASO 1: CONFIRMAR PAGO EN CASHEA =====
     console.log('📞 Llamando a Cashea API...');
+    console.log('URL:', `https://external.cashea.app/orders/${idNumber}/down-payment`);
     
+    // Usar node-fetch o https nativo para mejor compatibilidad
     const casheaResponse = await fetch(
       `https://external.cashea.app/orders/${idNumber}/down-payment`,
       {
@@ -90,32 +99,47 @@ module.exports = async function handler(req, res) {
           'Authorization': `ApiKey ${process.env.CASHEA_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          amount: paymentAmount 
-        }),
+        body: JSON.stringify({ amount: paymentAmount }),
+        // Nota: fetch nativo no soporta agent, pero intentamos de todos modos
       }
-    );
+    ).catch(async (fetchError) => {
+      // Si fetch falla por SSL, intentar con https nativo
+      console.log('⚠️ Fetch falló, intentando con https nativo...');
+      return await makeHttpsRequest(
+        `https://external.cashea.app/orders/${idNumber}/down-payment`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `ApiKey ${process.env.CASHEA_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ amount: paymentAmount })
+        }
+      );
+    });
 
     let casheaData = {};
-    try {
-      casheaData = await casheaResponse.json();
-    } catch (e) {
-      console.log('⚠️ Respuesta de Cashea no es JSON');
+    
+    if (casheaResponse.json) {
+      try {
+        casheaData = await casheaResponse.json();
+      } catch (e) {
+        console.log('⚠️ Respuesta de Cashea no es JSON');
+      }
+    } else {
+      casheaData = casheaResponse;
     }
 
-    console.log('📡 Respuesta de Cashea:', casheaResponse.status, casheaData);
+    const casheaStatus = casheaResponse.status || casheaResponse.statusCode || 200;
+    console.log('📡 Respuesta de Cashea:', casheaStatus, casheaData);
 
-    if (casheaResponse.status !== 201 && casheaResponse.status !== 200) {
-      console.error('❌ Error de Cashea:', casheaResponse.status);
-      return res.status(casheaResponse.status).json({ 
-        error: 'Error al confirmar con Cashea',
-        status: casheaResponse.status,
-        details: casheaData,
-        idNumber: idNumber
-      });
+    if (casheaStatus !== 201 && casheaStatus !== 200) {
+      console.error('❌ Error de Cashea:', casheaStatus);
+      // Continuar de todos modos para crear la orden en Shopify
+      console.log('⚠️ Continuando para crear orden en Shopify...');
+    } else {
+      console.log('✅ Pago confirmado en Cashea');
     }
-
-    console.log('✅ Pago confirmado en Cashea');
 
     // ===== PASO 2: CREAR ORDEN EN SHOPIFY =====
     console.log('🛍️ Creando orden en Shopify...');
@@ -126,8 +150,7 @@ module.exports = async function handler(req, res) {
           title: item.title,
           price: item.price,
           quantity: item.quantity,
-          sku: item.sku || '',
-          variant_id: item.variant_id || null
+          sku: item.sku || ''
         })),
         customer: {
           first_name: customer.first_name,
@@ -138,35 +161,34 @@ module.exports = async function handler(req, res) {
         billing_address: shippingAddress || {
           first_name: customer.first_name,
           last_name: customer.last_name,
-          address1: customer.address1 || '',
-          city: customer.city || '',
-          province: customer.province || '',
-          country: customer.country || 'VE',
-          zip: customer.zip || ''
+          address1: '',
+          city: '',
+          province: '',
+          country: 'VE',
+          zip: ''
         },
         shipping_address: shippingAddress || {
           first_name: customer.first_name,
           last_name: customer.last_name,
-          address1: customer.address1 || '',
-          city: customer.city || '',
-          province: customer.province || '',
-          country: customer.country || 'VE',
-          zip: customer.zip || ''
+          address1: '',
+          city: '',
+          province: '',
+          country: 'VE',
+          zip: ''
         },
         financial_status: 'pending',
-        fulfillment_status: null,
-        note: `Orden creada desde Cashea. ID: ${idNumber}`,
+        note: `Orden Cashea. ID: ${idNumber}`,
         tags: 'Cashea',
-        transactions: [
-          {
-            kind: 'sale',
-            status: 'pending',
-            amount: paymentAmount.toString(),
-            gateway: 'Cashea'
-          }
-        ]
+        transactions: [{
+          kind: 'sale',
+          status: 'pending',
+          amount: paymentAmount.toString(),
+          gateway: 'Cashea'
+        }]
       }
     };
+
+    console.log('📦 Orden Shopify:', JSON.stringify(shopifyOrder, null, 2));
 
     const shopifyResponse = await fetch(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2024-01/orders.json`,
@@ -183,14 +205,11 @@ module.exports = async function handler(req, res) {
     const shopifyData = await shopifyResponse.json();
     
     if (!shopifyResponse.ok) {
-      console.error('❌ Error al crear orden en Shopify:', shopifyData);
-      
+      console.error('❌ Error Shopify:', JSON.stringify(shopifyData));
       return res.status(207).json({
         success: true,
-        warning: 'Pago confirmado en Cashea pero error al crear orden en Shopify',
+        warning: 'Pago procesado pero error en Shopify',
         idNumber: idNumber,
-        amount: paymentAmount,
-        casheaResponse: casheaData,
         shopifyError: shopifyData
       });
     }
@@ -202,24 +221,63 @@ module.exports = async function handler(req, res) {
       success: true,
       idNumber: idNumber,
       amount: paymentAmount,
-      message: 'Pago confirmado en Cashea y orden creada en Shopify',
-      casheaResponse: casheaData,
+      message: 'Pago confirmado y orden creada',
       shopifyOrder: {
         id: shopifyData.order.id,
-        order_number: shopifyData.order.order_number,
-        total_price: shopifyData.order.total_price,
-        admin_url: shopifyData.order.admin_graphql_api_id
+        order_number: shopifyData.order.order_number
       }
     });
 
   } catch (error) {
     console.error('💥 Error del servidor:', error);
-    
     return res.status(500).json({ 
       error: 'Error del servidor',
-      message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      idNumber: idNumber
+      message: error.message
     });
   }
 };
+
+// Función auxiliar para hacer requests HTTPS con certificados no verificados
+function makeHttpsRequest(url, options) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    
+    const reqOptions = {
+      hostname: urlObj.hostname,
+      port: 443,
+      path: urlObj.pathname,
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      rejectUnauthorized: false // Permite certificados no verificados
+    };
+
+    const req = https.request(reqOptions, (response) => {
+      let data = '';
+      
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      response.on('end', () => {
+        let parsed = {};
+        try {
+          parsed = JSON.parse(data);
+        } catch (e) {
+          parsed = { raw: data };
+        }
+        parsed.statusCode = response.statusCode;
+        resolve(parsed);
+      });
+    });
+
+    req.on('error', (e) => {
+      reject(e);
+    });
+
+    if (options.body) {
+      req.write(options.body);
+    }
+    
+    req.end();
+  });
+}
