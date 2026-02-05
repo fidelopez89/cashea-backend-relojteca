@@ -189,9 +189,10 @@ module.exports = async function handler(req, res) {
     };
 
     console.log('📦 Orden Shopify:', JSON.stringify(shopifyOrder, null, 2));
-
+console.log('🔗 URL Shopify:', `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2025-01/orders.json`);
+console.log('🔑 Token (primeros 10):', process.env.SHOPIFY_ACCESS_TOKEN?.substring(0, 10));
     const shopifyResponse = await fetch(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2024-01/orders.json`,
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2025-01/orders.json`,
       {
         method: 'POST',
         headers: {
@@ -281,3 +282,4 @@ function makeHttpsRequest(url, options) {
     req.end();
   });
 }
+
