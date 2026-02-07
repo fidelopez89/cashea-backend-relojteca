@@ -99,7 +99,7 @@ module.exports = async function handler(req, res) {
           'Authorization': `ApiKey ${process.env.CASHEA_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount: paymentAmount }),
+        body: JSON.stringify({ amount: 0 }),
         // Nota: fetch nativo no soporta agent, pero intentamos de todos modos
       }
     ).catch(async (fetchError) => {
@@ -113,7 +113,7 @@ module.exports = async function handler(req, res) {
             'Authorization': `ApiKey ${process.env.CASHEA_API_KEY}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ amount: paymentAmount })
+          body: JSON.stringify({ amount: 0 })
         }
       );
     });
@@ -282,5 +282,6 @@ function makeHttpsRequest(url, options) {
     req.end();
   });
 }
+
 
 
