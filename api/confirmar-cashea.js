@@ -192,7 +192,6 @@ module.exports = async function handler(req, res) {
     
     const shopifyOrder = {
       order: {
-        source_name: 'web',
         line_items: lineItems.map(item => ({
           title: item.title,
           price: item.price,
@@ -330,3 +329,4 @@ function makeHttpsRequest(url, options) {
     req.end();
   });
 }
+
