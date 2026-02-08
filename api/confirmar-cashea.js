@@ -10,6 +10,41 @@ const httpsAgent = new https.Agent({
   rejectUnauthorized: false
 });
 
+// ================================================
+// FUNCIÓN PARA OBTENER TOKEN DE SHOPIFY AUTOMÁTICAMENTE
+// ================================================
+async function getShopifyAccessToken() {
+  const clientId = process.env.SHOPIFY_CLIENT_ID;
+  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
+  const store = process.env.SHOPIFY_STORE;
+  
+  const tokenUrl = `https://${store}.myshopify.com/admin/oauth/access_token?grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}`;
+  
+  console.log('🔐 Obteniendo token de Shopify...');
+  
+  try {
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.access_token) {
+      console.log('✅ Token obtenido correctamente');
+      return data.access_token;
+    } else {
+      console.error('❌ Error obteniendo token:', data);
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ Error en solicitud de token:', error.message);
+    return null;
+  }
+}
+
 module.exports = async function handler(req, res) {
   
   // Configurar CORS
@@ -141,11 +176,23 @@ module.exports = async function handler(req, res) {
       console.log('✅ Pago confirmado en Cashea');
     }
 
-    // ===== PASO 2: CREAR ORDEN EN SHOPIFY =====
+    // ===== PASO 2: OBTENER TOKEN DE SHOPIFY =====
+    const shopifyToken = await getShopifyAccessToken();
+    
+    if (!shopifyToken) {
+      console.error('❌ No se pudo obtener el token de Shopify');
+      return res.status(500).json({
+        error: 'Error de autenticación',
+        message: 'No se pudo obtener el token de Shopify'
+      });
+    }
+
+    // ===== PASO 3: CREAR ORDEN EN SHOPIFY =====
     console.log('🛍️ Creando orden en Shopify...');
     
     const shopifyOrder = {
       order: {
+        source_name: 'web',
         line_items: lineItems.map(item => ({
           title: item.title,
           price: item.price,
@@ -189,14 +236,15 @@ module.exports = async function handler(req, res) {
     };
 
     console.log('📦 Orden Shopify:', JSON.stringify(shopifyOrder, null, 2));
-console.log('🔗 URL Shopify:', `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2025-10/orders.json`);
-console.log('🔑 Token (primeros 10):', process.env.SHOPIFY_ACCESS_TOKEN?.substring(0, 10));
+    console.log('🔗 URL Shopify:', `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2025-10/orders.json`);
+    console.log('🔑 Token (primeros 10):', shopifyToken?.substring(0, 10));
+    
     const shopifyResponse = await fetch(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2025-10/orders.json`,
       {
         method: 'POST',
         headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN,
+          'X-Shopify-Access-Token': shopifyToken,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(shopifyOrder)
@@ -282,8 +330,3 @@ function makeHttpsRequest(url, options) {
     req.end();
   });
 }
-
-
-
-
-
